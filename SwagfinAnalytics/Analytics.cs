@@ -131,9 +131,10 @@ namespace SwagfinAnalytics
                     if (GetFailedTraitsCount() >= configurations.MaxFailedToAbort)
                         StopService();
                 }
-                //RENABLE THE CLOCK
-                analyticsTimer.Start();
+
             }
+            //RENABLE THE CLOCK
+            analyticsTimer.Start();
         }
 
         private void SetNextCallBackFromServerResponse(string response)
