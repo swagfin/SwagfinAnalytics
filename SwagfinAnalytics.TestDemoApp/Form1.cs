@@ -25,21 +25,28 @@ namespace SwagfinAnalytics.TestDemoApp
                 //Product
                 AppName = "MyAnalyticsApp",
                 AppSecretKey = "someHashHashKey125456",
-                TrackDeviceLastSeen = true,
+                TrackDeviceHeartBeat = true,
             };
 
             this.analytics = new Analytics(analyticConfiguration, new AnalyticsHttpService());
+            this.analytics.Track("System Startups", DateTime.Now.ToString());
+            this.analytics.Track("System CrushError", "Unable to Connect to Database");
+            this.analytics.Track("System Error", "Authentication Failed");
+
             InitializeComponent();
 
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
+
             var statusUpdate = this.analytics.GetAnalyticsStatus();
             if (statusUpdate == AnalyticsStatus.Stopped)
                 this.analytics.StartService();
             else
                 MessageBox.Show($"Service is {statusUpdate}");
+
+            this.analytics.Track("Analytics Service Start", DateTime.Now.ToString());
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -49,6 +56,24 @@ namespace SwagfinAnalytics.TestDemoApp
                 this.analytics.StopService();
             else
                 MessageBox.Show($"Service is {statusUpdate}");
+
+            this.analytics.Track("Analytics Service Stopped", DateTime.Now.ToString());
+
+        }
+
+        private void button1_MouseHover(object sender, EventArgs e)
+        {
+            this.analytics.Track("User Hovering", "On Start Analytic Button");
+        }
+
+        private void button2_MouseHover(object sender, EventArgs e)
+        {
+            this.analytics.Track("User Hovering", "On Stop Analytic Service Button");
+        }
+
+        private void Form1_MouseClick(object sender, MouseEventArgs e)
+        {
+            this.analytics.Track("User Clicking", "Main Wiindow");
         }
     }
 }

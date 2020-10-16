@@ -46,6 +46,7 @@ namespace SwagfinAnalytics
         public AnalyticConfiguration GetConfigurations() => configurations;
         public AnalyticsStatus GetAnalyticsStatus() => this.analyticsStatus;
 
+        public void Track(string traitKey, string traitValue) => Track(new Trait { Key = traitKey, Value = traitValue });
         public void Track(Trait trait) => this.pendingToSendTraits.Enqueue(trait);
 
         public void Track(IList<Trait> traits)
@@ -56,73 +57,82 @@ namespace SwagfinAnalytics
 
         private async void OnTimedEvent(object source, ElapsedEventArgs e)
         {
+            analyticsTimer.Stop();
             this.analyticsStatus = AnalyticsStatus.Running;
             //Track Last Seen
-            if (configurations.TrackDeviceLastSeen)
-                this.Track(new Trait { Key = "lastSeen", Value = DateTime.Now.ToString() });
+            if (configurations.TrackDeviceHeartBeat)
+                this.Track(new Trait { Key = "heartBeat", Value = DateTime.Now.ToString() });
             //Proceed
-            var readyToSendTraits = this.pendingToSendTraits.Where(x => x.SentSuccesfully != true && x.NextSending < DateTime.Now);
+            var readyToSendTraits = this.pendingToSendTraits.Where(x => x.SentSuccesfully != true && x.NextSending < DateTime.Now).Take(100);
             //Check if Null
             if (readyToSendTraits != null && readyToSendTraits.Count() > 0)
             {
+
                 AnalyticsLogger.LogInformation($"Executing ({readyToSendTraits.Count()}) Analytics");
+                //Append All Traits
+                string allTraitsAppend = string.Empty;
                 foreach (Trait trait in readyToSendTraits)
+                    allTraitsAppend = $"{allTraitsAppend}{trait.Key} : {trait.Value}{Environment.NewLine}";
+
+                try
                 {
+                    AnalyticsLogger.LogInformation($"Sending All Traits");
+                    this.analyticsStatus = AnalyticsStatus.Seeding;
+                    //Parameters
+                    Dictionary<string, string> parameters = new Dictionary<string, string>();
+                    parameters.Add("traitKey", "rawData");
+                    parameters.Add("traitValue", allTraitsAppend);
+                    //Add Configs
+                    parameters.Add("appName", configurations.AppName);
+                    parameters.Add("deviceName", configurations.DeviceName);
+                    parameters.Add("deviceId", configurations.DeviceID);
+                    parameters.Add("sessionId", configurations.CallBackSessionId);
+                    //Add Default
+                    foreach (var param in configurations.AdditionalRequestParameters)
+                        parameters.Add(param.Key, param.Value);
 
-                    try
+                    //Headers
+                    Dictionary<string, string> headers = new Dictionary<string, string>();
+                    headers.Add("appSecret", configurations.AppSecretKey);
+
+                    //Add Default
+                    foreach (var header in configurations.AdditionalRequestHeaders)
+                        headers.Add(header.Key, header.Value);
+                    //Call Http Client
+                    string response = await this.analyticsClient.RequestAsync(configurations.EndPointUrl, System.Net.Http.HttpMethod.Post, parameters, headers);
+                    this.analyticsStatus = AnalyticsStatus.Running;
+                    //Update
+                    foreach (Trait trait in readyToSendTraits)
                     {
-                        AnalyticsLogger.LogInformation($"Sending Trait: {trait.Id}");
-                        this.analyticsStatus = AnalyticsStatus.Seeding;
-                        //Parameters
-                        Dictionary<string, string> parameters = new Dictionary<string, string>();
-                        parameters.Add("traitKey", trait.Key);
-                        parameters.Add("traitValue", trait.Value);
-                        //Add Configs
-                        parameters.Add("appName", configurations.AppName);
-                        parameters.Add("deviceName", configurations.DeviceName);
-                        parameters.Add("deviceId", configurations.DeviceID);
-                        parameters.Add("sessionId", configurations.CallBackSessionId);
-                        //Add Default
-                        foreach (var param in configurations.AdditionalRequestParameters)
-                            parameters.Add(param.Key, param.Value);
-
-                        //Headers
-                        Dictionary<string, string> headers = new Dictionary<string, string>();
-                        headers.Add("appSecret", configurations.AppSecretKey);
-
-                        //Add Default
-                        foreach (var header in configurations.AdditionalRequestHeaders)
-                            headers.Add(header.Key, header.Value);
-                        //Call Http Client
-                        string response = await this.analyticsClient.RequestAsync(configurations.EndPointUrl, System.Net.Http.HttpMethod.Post, parameters, headers);
-                        this.analyticsStatus = AnalyticsStatus.Running;
-                        //Update
                         trait.SentSuccesfully = true;
                         trait.FailedCount = 0;
                         AnalyticsLogger.LogInformation($"Trait: {trait.Id} Sent Successfully, Response: {response}");
-
-                        //Set Next Call Back
-                        SetNextCallBackFromServerResponse(response);
-                        //Detected One has been Sent try to Reque
                         RemoveTraitFromQueue(trait);
-
-                        RequeueAllUnSent();
-
                     }
-                    catch (Exception ex)
+
+                    //Set Next Call Back
+                    SetNextCallBackFromServerResponse(response);
+                    //Detected One has been Sent try to Reque
+                    RequeueAllUnSent();
+
+                }
+                catch (Exception ex)
+                {
+                    foreach (Trait trait in readyToSendTraits)
                     {
                         AnalyticsLogger.LogError($"Error Sending Trait: {trait.Id}, Exception: {ex.Message}");
                         //Mark to be Requeued
                         trait.FailedCount++;
                         trait.NextSending = trait.NextSending.AddMinutes(trait.FailedCount);
-                        AnalyticsLogger.LogInformation($"Added Queue Trait: {trait.Id}");
-                        //Maximum Fails to Stop
-                        if (GetFailedTraitsCount() >= configurations.MaxFailedToAbort)
-                            StopService();
+                        AnalyticsLogger.LogInformation($"Added Trait: {trait.Id} to Queue To Send Later at: {trait.NextSending}");
                     }
 
-
+                    //Maximum Fails to Stop
+                    if (GetFailedTraitsCount() >= configurations.MaxFailedToAbort)
+                        StopService();
                 }
+                //RENABLE THE CLOCK
+                analyticsTimer.Start();
             }
         }
 
@@ -195,6 +205,8 @@ namespace SwagfinAnalytics
         }
 
         private int GetFailedTraitsCount() => this.pendingToSendTraits.Where(x => x.SentSuccesfully != true && x.FailedCount > 0).Count();
+
+
     }
     public enum AnalyticsStatus
     {

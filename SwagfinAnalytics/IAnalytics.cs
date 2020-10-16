@@ -7,6 +7,7 @@ namespace SwagfinAnalytics
     {
         AnalyticConfiguration GetConfigurations();
         AnalyticsStatus GetAnalyticsStatus();
+        void Track(string traitKey, string traitValue);
         void Track(Trait trait);
         void Track(IList<Trait> traits);
         void StartService();
