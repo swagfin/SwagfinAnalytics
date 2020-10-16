@@ -19,7 +19,6 @@ namespace SwagfinAnalytics.TestDemoApp
             {
                 DeviceID = "3556-5785-5255-TEST-0001", //3CA3-52FB-86E7-80B3-2F3C
                 DeviceName = Environment.MachineName,
-                //  EndPointUrl = "http://semanticpos.com/analytics/",
                 EndPointUrl = "http://127.0.0.1:8443/",
 
                 //Product
