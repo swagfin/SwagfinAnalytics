@@ -47,7 +47,13 @@ namespace SwagfinAnalytics
         public AnalyticsStatus GetAnalyticsStatus() => this.analyticsStatus;
 
         public void Track(string traitKey, string traitValue) => Track(new Trait { Key = traitKey, Value = traitValue });
-        public void Track(Trait trait) => this.pendingToSendTraits.Enqueue(trait);
+        public void Track(Trait trait)
+        {
+            this.pendingToSendTraits.Enqueue(trait);
+            //Check Track
+            if (analyticsStatus == AnalyticsStatus.Stopped)
+                StartService();
+        }
 
         public void Track(IList<Trait> traits)
         {
