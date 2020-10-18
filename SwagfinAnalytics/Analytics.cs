@@ -63,7 +63,7 @@ namespace SwagfinAnalytics
             if (configurations.TrackDeviceHeartBeat)
                 this.Track(new Trait { Key = "heartBeat", Value = DateTime.Now.ToString() });
             //Proceed
-            var readyToSendTraits = this.pendingToSendTraits.Where(x => x.SentSuccesfully != true && x.NextSending < DateTime.Now).Take(100);
+            var readyToSendTraits = this.pendingToSendTraits.Where(x => x.SentSuccesfully != true && x.NextSending < DateTime.Now).Take(20);
             //Check if Null
             if (readyToSendTraits != null && readyToSendTraits.Count() > 0)
             {
