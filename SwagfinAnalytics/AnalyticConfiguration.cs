@@ -27,7 +27,7 @@ namespace SwagfinAnalytics
         public string AppSecretKey { get; set; }
         public int NextCallBackInSeconds { get; internal set; }
         public int MaxFailedToAbort { get; set; }
-        public string CallBackSessionId { get; internal set; }
+        public string CallBackSessionId { get; set; }
         public bool TrackDeviceHeartBeat { get; set; } = true;
         public Dictionary<string, string> AdditionalRequestParameters { get; set; }
         public Dictionary<string, string> AdditionalRequestHeaders { get; set; }

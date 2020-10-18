@@ -11,21 +11,23 @@ namespace SwagfinAnalytics
     {
         private readonly AnalyticConfiguration configurations;
         private readonly IAnalyticsHttpService analyticsClient;
+        private readonly AnalyticsLogger logger;
         private ConcurrentQueue<Trait> pendingToSendTraits { get; set; } = new ConcurrentQueue<Trait>();
         private AnalyticsStatus analyticsStatus { get; set; }
         private Timer analyticsTimer { get; set; }
 
-        public Analytics(AnalyticConfiguration analyticsConfigurations, IAnalyticsHttpService analyticsHttpService)
+        public Analytics(AnalyticConfiguration analyticsConfigurations, IAnalyticsHttpService analyticsHttpService, AnalyticsLogger analyticsLogger)
         {
             this.configurations = analyticsConfigurations;
             this.analyticsClient = analyticsHttpService;
+            this.logger = analyticsLogger;
             this.pendingToSendTraits = new ConcurrentQueue<Trait>();
             this.analyticsStatus = AnalyticsStatus.Stopped;
         }
 
         public void StartService()
         {
-            AnalyticsLogger.LogInformation("Starting Analytics Service");
+            logger.LogInformation("Starting Analytics Service");
             this.analyticsStatus = AnalyticsStatus.Starting;
             //Create an Instance of Timer
             analyticsTimer = new Timer();
@@ -35,7 +37,7 @@ namespace SwagfinAnalytics
         }
         public void StopService()
         {
-            AnalyticsLogger.LogInformation("Stopping Analytics Service");
+            logger.LogInformation("Stopping Analytics Service");
             this.analyticsStatus = AnalyticsStatus.Stopping;
             analyticsTimer.Enabled = false;
             analyticsTimer = null;
@@ -68,7 +70,7 @@ namespace SwagfinAnalytics
             if (readyToSendTraits != null && readyToSendTraits.Count() > 0)
             {
 
-                AnalyticsLogger.LogInformation($"Executing ({readyToSendTraits.Count()}) Analytics");
+                logger.LogInformation($"Executing ({readyToSendTraits.Count()}) Analytics");
                 //Append All Traits
                 string allTraitsAppend = string.Empty;
                 foreach (Trait trait in readyToSendTraits)
@@ -76,7 +78,7 @@ namespace SwagfinAnalytics
 
                 try
                 {
-                    AnalyticsLogger.LogInformation($"Sending All Traits");
+                    logger.LogInformation($"Sending All Traits");
                     this.analyticsStatus = AnalyticsStatus.Seeding;
                     //Parameters
                     Dictionary<string, string> parameters = new Dictionary<string, string>();
@@ -106,7 +108,7 @@ namespace SwagfinAnalytics
                     {
                         trait.SentSuccesfully = true;
                         trait.FailedCount = 0;
-                        AnalyticsLogger.LogInformation($"Trait: {trait.Id} Sent Successfully, Response: {response}");
+                        logger.LogInformation($"Trait: {trait.Id} Sent Successfully, Response: {response}");
                         RemoveTraitFromQueue(trait);
                     }
 
@@ -120,16 +122,17 @@ namespace SwagfinAnalytics
                 {
                     foreach (Trait trait in readyToSendTraits)
                     {
-                        AnalyticsLogger.LogError($"Error Sending Trait: {trait.Id}, Exception: {ex.Message}");
+                        logger.LogError($"Error Sending Trait: {trait.Id}, Exception: {ex.Message}");
                         //Mark to be Requeued
                         trait.FailedCount++;
                         trait.NextSending = trait.NextSending.AddMinutes(trait.FailedCount);
-                        AnalyticsLogger.LogInformation($"Added Trait: {trait.Id} to Queue To Send Later at: {trait.NextSending}");
+                        logger.LogInformation($"Added Trait: {trait.Id} to Queue To Send Later at: {trait.NextSending}");
                     }
 
                     //Maximum Fails to Stop
-                    if (GetFailedTraitsCount() >= configurations.MaxFailedToAbort)
-                        StopService();
+                    int maxFailed = GetFailedTraitsCount();
+                    if (maxFailed >= configurations.MaxFailedToAbort)
+                        OnMaxFailedToSendTraitsReached(maxFailed);
                 }
 
             }
@@ -141,7 +144,7 @@ namespace SwagfinAnalytics
         {
             try
             {
-                AnalyticsLogger.LogInformation($"Attempting to Get Session ID and Next CallBack from Response");
+                logger.LogInformation($"Attempting to Get Session ID and Next CallBack from Response");
 
                 var dataX = response.Split('|');
                 int nextCallback = 0;
@@ -158,7 +161,7 @@ namespace SwagfinAnalytics
                 {
                     this.configurations.NextCallBackInSeconds = nextCallback;
                     analyticsTimer.Interval = this.configurations.NextCallBackInSeconds;
-                    AnalyticsLogger.LogInformation($"UPDATED: NextCallBack: {nextCallback}");
+                    logger.LogInformation($"UPDATED: NextCallBack: {nextCallback}");
                 }
 
                 //Get Session ID
@@ -168,26 +171,40 @@ namespace SwagfinAnalytics
                 if (!string.IsNullOrWhiteSpace(nextSessionId) && nextSessionId != configurations.CallBackSessionId)
                 {
                     this.configurations.CallBackSessionId = nextSessionId;
-                    AnalyticsLogger.LogInformation($"UPDATED: NextSessionID: {nextSessionId}");
+                    logger.LogInformation($"UPDATED: NextSessionID: {nextSessionId}");
+                    OnSessionIdRenewed(nextSessionId);
                 }
 
             }
             catch (Exception ex)
             {
-                AnalyticsLogger.LogError($"ERROR: FAILED Get Session ID and Next CallBack from Response: {ex.Message}");
+                logger.LogError($"ERROR: FAILED Get Session ID and Next CallBack from Response: {ex.Message}");
             }
         }
 
+        protected virtual void OnSessionIdRenewed(string newSessionId)
+        {
+            logger.LogInformation($"Session ID Renewed To: {newSessionId}");
+        }
+        protected virtual void OnCallBackChanged(int nextCallBack)
+        {
+            logger.LogInformation($"Next CallBack Changed: {nextCallBack}");
+        }
+        protected virtual void OnMaxFailedToSendTraitsReached(int failedCount)
+        {
+            logger.LogInformation($"Maximum Failed Traits ({failedCount}) reached, Terminating Analytics service");
+            StopService();
+        }
         private void RemoveTraitFromQueue(Trait trait)
         {
-            AnalyticsLogger.LogInformation($"Attempting to Remove Trait: {trait.Id}");
+            logger.LogInformation($"Attempting to Remove Trait: {trait.Id}");
             //Remove Trait
             Trait traitRemoval = trait;
             bool removed = this.pendingToSendTraits.TryDequeue(out traitRemoval);
             if (removed)
-                AnalyticsLogger.LogInformation($"Trait: {trait.Id} REMOVED from Queue");
+                logger.LogInformation($"Trait: {trait.Id} REMOVED from Queue");
             else
-                AnalyticsLogger.LogWarning($"Trait: {trait.Id} WAS NOT REMOVED from Queue");
+                logger.LogWarning($"Trait: {trait.Id} WAS NOT REMOVED from Queue");
             //Check if Null
         }
 
@@ -196,7 +213,7 @@ namespace SwagfinAnalytics
             var allUnsent = this.pendingToSendTraits.Where(x => x.SentSuccesfully != true && x.FailedCount > 0);
             if (allUnsent != null && allUnsent.Count() > 0)
             {
-                AnalyticsLogger.LogInformation($"Requeing ({allUnsent.Count()}) Analytics");
+                logger.LogInformation($"Requeing ({allUnsent.Count()}) Analytics");
                 foreach (Trait trait in allUnsent)
                 {
                     trait.NextSending = DateTime.Now.AddSeconds(trait.FailedCount); //Based on Failure Counts

@@ -22,5 +22,17 @@ namespace SwagfinAnalytics.TestDemoApp.Properties {
                 return defaultInstance;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string LastAnalyticsSessionID {
+            get {
+                return ((string)(this["LastAnalyticsSessionID"]));
+            }
+            set {
+                this["LastAnalyticsSessionID"] = value;
+            }
+        }
     }
 }

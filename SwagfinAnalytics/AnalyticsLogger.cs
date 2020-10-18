@@ -5,25 +5,20 @@ using System.Text;
 
 namespace SwagfinAnalytics
 {
-    public static class AnalyticsLogger
+    public class AnalyticsLogger
     {
-        public static void LogInformation(string log)
+        public virtual void LogInformation(string log)
         {
             Console.WriteLine($"{Environment.NewLine} {log} At {DateTime.Now:yyyy-MM-dd hh:mm:ss}");
         }
 
-        public static void LogWarning(string log)
+        public virtual void LogWarning(string log)
         {
             Console.WriteLine($"WARNING: {Environment.NewLine} {log} At {DateTime.Now:yyyy-MM-dd hh:mm:ss}");
         }
-        public static void LogError(string log)
+        public virtual void LogError(string log)
         {
             Console.WriteLine($"ERROR: {Environment.NewLine} {log} At {DateTime.Now:yyyy-MM-dd hh:mm:ss}");
-        }
-
-        public static void ClearLogs()
-        {
-            //Do Nothing for Now
         }
     }
 }
